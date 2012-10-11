@@ -48,7 +48,7 @@ Pdok.Api.prototype.defaultLayers = {
     },
     BBG2008: {
         layertype: 'WMS',
-        name: 'BBG - Bestand Bodemgebruik 2008',
+        name: 'BBG - Bestand Bodemgebruik 2008 (WMS)',
         url: 'http://geodata.nationaalgeoregister.nl/bestandbodemgebruik2008/wms',
         layers: 'bbg2008',
         transparent: 'true',

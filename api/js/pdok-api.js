@@ -11,13 +11,38 @@
  *  <iframe width="400" height="300" frameborder="0" 
  *    scrolling="no" marginheight="0" marginwidth="0" 
  *    src="api/api.html?mloc=136260,456394&loc=136260,456394&zl=8"
- *    style="border: 0">
+ *  >
  * OR
  *  <iframe width="400" height="300" frameborder="0" 
  *    scrolling="no" marginheight="0" marginwidth="0" 
  *    src="api/api.html?mloc=136260,456394&mt=1&bbox=130000,450000,150000,470000"
- *    style="border: 0">
+ *  >
  */
+
+
+Pdok = {};
+Pdok.API_VERSION_NUMBER = '1.0-rc1';
+
+// CONFIG
+
+// The api-url is the base-url for api.js, markersdefs, layerdefs etc
+// The proxyhost is needed for the geocoder
+
+// PDOK LOKET PRODUKTIE
+Pdok.ApiUrl = 'http://pdokkaart.pdokloket.nl/api';
+OpenLayers.ProxyHost = "http://"+window.location.host+"/proxy.php?url=";  // current pdokloket proxy
+
+// TEST
+//Pdok.ApiUrl = 'http://www.duif.net/pdok/api';
+//OpenLayers.ProxyHost = "http://"+window.location.host+"/cgi-bin/proxy.cgi?url=";
+
+// ONTWIKKEL
+//Pdok.ApiUrl = 'http://localhost/pdokkaart/api';
+//OpenLayers.ProxyHost = "http://"+window.location.host+"/cgi-bin/proxy.cgi?url=";
+
+
+OpenLayers.ImgPath = './img/';
+
 
 OpenLayers.Feature.Vector.style['default'].strokeColor = 'red';
 OpenLayers.Feature.Vector.style['default'].fillColor = 'red';
@@ -28,10 +53,6 @@ OpenLayers.Feature.Vector.style['temporary'].pointRadius = 0;
 OpenLayers.Feature.Vector.style['temporary'].strokeColor = 'red';
 OpenLayers.Feature.Vector.style['temporary'].fillColor = 'red';
 
-// The proxyhost is needed for the geocoder, wfs and txt- or kmlurl
-OpenLayers.ProxyHost = "http://"+window.location.host+"/cgi-bin/proxy.cgi?url=";
-//OpenLayers.ProxyHost = "http://"+window.location.host+"/proxy.php?url=";  // current pdokloket proxy
-OpenLayers.ImgPath = './img/';
 OpenLayers.Lang["nl"] = OpenLayers.Util.applyDefaults({
     'unhandledRequest': "Het verzoek is niet afgehandeld met de volgende melding: ${statusText}",
     'Permalink': "Permanente verwijzing",
@@ -57,7 +78,40 @@ OpenLayers.Lang.setCode('nl');
 
 Proj4js.defs["EPSG:28992"] = "+proj=sterea +lat_0=52.15616055555555 +lon_0=5.38763888888889 +k=0.9999079 +x_0=155000 +y_0=463000 +ellps=bessel +towgs84=565.040,49.910,465.840,-0.40939,0.35971,-1.86849,4.0772";
 
-Pdok = {};
+Pdok.createBaseUri = function(){
+    var pathname = window.location.pathname;
+    var path = pathname;
+    if (pathname.search(/\.html|\.php|.jsp/)>0){
+        pathparts = pathname.substr(0,pathname.search(/\.html|\.php|.jsp/)).split('/');
+        path = pathparts.slice(0, pathparts.length-1);
+        path = path.join('/');
+        path +='/';
+    }
+    base = window.location.protocol+'//'+window.location.host + path;
+    return base;
+}
+
+// it is possible to override the markerdefinitions with a request paramater markersdef
+if( OpenLayers.Util.getParameters()['markersdef'] != null){
+    Pdok.markersdef = OpenLayers.Util.getParameters()['markersdef'];
+}
+else {
+    // we use the markersdef from the api
+    Pdok.markersdef = Pdok.ApiUrl+'/js/pdok-markers.js';
+}
+// inject a script include for the markersdef, being either an external or the api included one
+document.write('<script type="text/javascript" src="'+Pdok.markersdef+'"></script>');
+
+// it is possible to override the layerdefinitions with a request paramater layersdef
+if( OpenLayers.Util.getParameters()['layersdef'] != null){
+    Pdok.layersdef = OpenLayers.Util.getParameters()['layersdef'];
+}
+else {
+    // we use the layersdef from the api
+    Pdok.layersdef = Pdok.ApiUrl+'/js/pdok-layers.js';
+}
+// inject a script include for the layersdef, being either an external or the api included one
+document.write('<script type="text/javascript" src="'+Pdok.layersdef+'"></script>');
 
 Pdok.Api = function(config) {
 
@@ -221,372 +275,45 @@ Pdok.Api = function(config) {
     this.locationtoolzmin = '0';
     this.locationtoolzmax = '30';
 
+    this.markersdef = null;
+    // an external markersdef is temporarily parked in Pdok.markersdef
+    if (Pdok.markersdef) {
+        this.markersdef = ''+Pdok.markersdef;
+    }
 
-    /**
-     * @private
-     * The attribution added to the map
-     */
-    // TODO moet dit?
-    this.attribution = '&copy; <a target="_parent" href="http://www.terrestris.de">terrestris GmbH & Co. KG</a>,</br>' +
-        'Data by <a target="_parent" href="http://www.openstreetmap.org">OpenStreetMap</a> and contributors, <a target="_parent" href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>';
+    // an external layersdef is temporarily parked in Pdok.layersdef
+    this.layersdef = null;
+    if (Pdok.layersdef) {
+        this.layersdef = ''+Pdok.layersdef;
+    }
+
+    this.defaultLayers = OpenLayers.Util.applyDefaults(
+        this.defaultPdokLayers, this.defaultLayers);
 
     // create this.styles, based on either this.defaultStyles object, OR via a this.customStyles object (TODO)
     this.createStyles();
 
     if (config) {
+        // hack to make x and y fields null
+        // better fix would be to remove one of the three locationtool fields
+        // so you have either ONE field (wkt) or TWO (x and y)
+        if (config.locationtoolwktfield){
+            config.locationtoolxfield = null;
+            config.locationtoolyfield = null;
+        }
         OpenLayers.Util.extend( this, config );
     }
+
     this.createOlMap();
-
-
 }
 
 
-Pdok.Api.prototype.defaultStyles=[
-        // all point marker styles will use mt0 as default
-        // so you only have to define the props that are different from mt0
-        // we will use OpenLayers.Util.applyDefault to use this one as default
-        {
-            id: 'mt0',
-            name: 'Standaard marker',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/star-3.png",
-            //externalGraphic: "api/markertypes/star-3.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt1',
-            name: 'Informatie blauw',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/information_blue.png",
-            //externalGraphic: "api/markertypes/information_blue.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt2',
-            name: 'Informatie groen',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/information_green.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt3',
-            name: 'Informatie geel',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/information_yellow.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt4',
-            name: 'Geonovum blauw',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/geonovum_blue.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt5',
-            name: 'Geonovum groen',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/geonovum_green.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt6',
-            name: 'Geonovum geel',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/geonovum_yellow.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt7',
-            name: 'Rijks blauw',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/rijk_blue.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt8',
-            name: 'Rijks groen',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/rijk_green.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt9',
-            name: 'Rijks geel',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/rijk_yellow.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt10',
-            name: 'Kadaster blauw',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/kadaster_blue.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt11',
-            name: 'Kadaster groen',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/kadaster_green.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt12',
-            name: 'Kadaster geel',
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/kadaster_yellow.png",
-            graphicHeight: 37,
-            graphicWidth: 32,
-            graphicYOffset: -37
-        },
-        {
-            id: 'mt13',
-            name: 'Werkzaamheden',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictograms-road_signs-workman_ahead_roadsign.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt14',
-            name: 'Waarschuwing',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictogram-din-w000-general.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt15',
-            name: 'Zeer licht ontvlambaar',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictogram-din-w001-flame.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt16',
-            name: 'Explosief',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictogram-din-w002-rxplosion.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt17',
-            name: 'Electriciteit',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictogram-din-w008-electricisty.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt18',
-            name: 'Lage temperatuur',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictogram-din-w017-low_temerature.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt19',
-            name: 'Wielrijders niet toegestaan',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictograms-road_signs-no_bicycles_roadsign.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt20',
-            name: 'Personenwagens niet toegestaan',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictograms-road_signs-no_cars_sign.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt21',
-            name: 'Verboden in te rijden',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictograms-road_signs-no_entry.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt22',
-            name: 'Personen niet toegestaan',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictograms-road_signs-no_entry_sign_with_a_man.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt23',
-            name: 'Opgelet',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictograms-road_signs-other_dangers_sign.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt24',
-            name: 'Verboden voor alle verkeer',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictograms-road_signs-simple_round_sign.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt25',
-            name: 'Stop',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictograms-road_signs-stop_sign.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt26',
-            name: 'Verkeerslichten',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictograms-road_signs-traffic_lights_ahead_sign.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
-        },
-        {
-            id: 'mt27',
-            name: 'Verplichte rijrichting',
-            externalGraphic: 'http://pdokkaart.pdokloket.nl/api/markertypes/pictographs-ahead_only.png',
-            graphicHeight: 32,
-            graphicWidth: 32,
-            graphicYOffset: -32
+Pdok.Api.prototype.defaultStyles=[];
 
-        },
-        {
-            id: 'pt0', 
-            fillColor: '#273397',
-            fillOpacity: 0.3, 
-            strokeColor: '#273397', 
-            strokeWidth: 2, 
-            name: 'default vlak'
-        },
-        {
-            id:'pt1', 
-            fillColor:'red', 
-            strokeColor:'black', 
-            strokeWidth:1, 
-            name:'rood zwart'
-        },
-        {
-            id:'pt2', 
-            fillColor:'red', 
-            strokeColor:'black', 
-            strokeWidth:3, 
-            name:'rood zwart 3 pxiel lijn'
-        },
-        {
-            id:'pt3', 
-            fillColor:'red', 
-            fillOpacity:1, 
-            strokeColor:'black', 
-            strokeWidth:5, 
-            strokeOpacity:0.5, 
-            name:'rood, zwart, 5px transp. lijn'
-        },
-        {
-            id:'pt4', 
-            fillColor:'green', 
-            strokeColor:'blue', 
-            strokeWidth:1, 
-            name:'groen blauw'
-        },
-        {
-            id:'pt5', 
-            fillColor:'green', 
-            strokeColor:'blue', 
-            strokeWidth:3, 
-            fillOpacity:0.5, 
-            name:'groen transparante vulling blauwe lijn'
-        },
-        {
-            id:'pt6', 
-            fillColor:'#ffff00', 
-            strokeColor:'blue', 
-            strokeWidth:5, 
-            fillOpacity:1, 
-            name:'geel blauw'
-        },
-        {
-            id: 'lt0', 
-            strokeColor: '#273397', 
-            strokeWidth: 5,
-            strokeOpacity: 0.5, 
-            name: 'default lijn'
-        },
-        {
-            id:'lt1', 
-            strokeColor:'red', 
-            strokeWidth:1, 
-            name:'lijn 2'
-        },
-        {
-            id:'lt2', 
-            strokeColor:'red', 
-            strokeWidth:3, 
-            name:'lijn x'
-        },
-        {
-            id:'lt3', 
-            strokeColor:'red', 
-            strokeWidth:5, 
-            strokeOpacity:0.5, 
-            name:'lijn 27' 
-        },
-        {
-            id:'lt4', 
-            strokeColor:'green', 
-            strokeWidth:1, 
-            name:'lijn6' 
-        },
-        {
-            id:'lt5', 
-            strokeColor:'green', 
-            strokeWidth:3, 
-            strokeOpacity:0.5, 
-            name:'lijn 4' 
-        },
-        {
-            id:'lt5', 
-            strokeColor:'green', 
-            strokeWidth:5, 
-            strokeOpacity:0.5, 
-            name:'lijn 4' 
-        },
-        {
-            id:'lt7', 
-            strokeColor:'#ffff00', 
-            strokeWidth:5, 
-            strokeOpacity:1, 
-            strokeOpacity:0.5, 
-            name:'lijn 3'
-        }
-    ]
-
-Pdok.Api.prototype.defaultLayers = {
+Pdok.Api.prototype.defaultPdokLayers = {
         BRT: {
             layertype: 'WMTS',
-            name: 'BRT Achtergrondkaart (wmts)',
+            name: 'BRT Achtergrondkaart (WMTS)',
             url: 'http://geodata.nationaalgeoregister.nl/wmts/',
             layer: 'brtachtergrondkaart',
             style: null,
@@ -597,7 +324,7 @@ Pdok.Api.prototype.defaultLayers = {
         },
         CBS_GEMEENTEN: {
             layertype: 'WMS',
-            name: 'CBS Gemeentegrenzen (2008)',
+            name: 'CBS Gemeentegrenzen 2008 (WMS)',
             url: 'http://geodata.nationaalgeoregister.nl/bevolkingskernen2008/wms',
             layers: 'gemeentegrens_generalisatie_2008',
             transparent: 'true',
@@ -608,7 +335,7 @@ Pdok.Api.prototype.defaultLayers = {
         },
         CBS_PROVINCIES: {
             layertype: 'WMS',
-            name: 'CBS Provinciegrenzen (2008)',
+            name: 'CBS Provinciegrenzen 2008 (WMS)',
             url: 'http://geodata.nationaalgeoregister.nl/bevolkingskernen2008/wms',
             layers: 'provgrens_generalisatie_2008',
             transparent: 'true',
@@ -621,7 +348,7 @@ Pdok.Api.prototype.defaultLayers = {
 
 /**
  * @private
- * 
+ *
  * Creates an OpenLayers Map object due to the given config.
  */
 Pdok.Api.prototype.createOlMap = function() {
@@ -746,8 +473,6 @@ Pdok.Api.prototype.createOlMap = function() {
 
     // apply TXTURL if applicable
     if (this.txturl != null) {
-        var lyrTextLayer = new OpenLayers.Layer.Text( "Textlayer", {location: this.txturl} );
-        //olMap.addLayer(lyrTextLayer);
         this.addTxt(this.txturl);
     }
 
@@ -756,6 +481,9 @@ Pdok.Api.prototype.createOlMap = function() {
         olMap.zoomToExtent(OpenLayers.Bounds.fromArray(this.bbox).transform(olMap.displayProjection, olMap.getProjectionObject()));
     }
     else if (this.zoom != null && this.loc != null) {
+        if (typeof this.loc == 'string') {
+            this.loc = this.loc.split(',');
+        }
         olMap.setCenter (new OpenLayers.LonLat(parseInt(this.loc[0]), parseInt(this.loc[1])), parseInt(this.zoom));
     } else {
         //olMap.zoomToMaxExtent();
@@ -827,15 +555,15 @@ Pdok.Api.prototype.createOlMap = function() {
 
     // enable Locationtool IF this.locationtool is set via config
     if (this.locationtool){
-        var yorwkt = this.locationtoolwktfield;
+        var xorwkt = this.locationtoolwktfield;
         if(this.locationtoolyfield){
             yorwkt = this.locationtoolyfield;
         }
         this.enableLocationTool( this.locationtoolstyle,
             this.locationtoolzmin,
             this.locationtoolzmax,
-            this.locationtoolxfield,
-            yorwkt
+            xorwkt,
+            this.locationtoolyfield
             );
     }
     return olMap;
@@ -905,7 +633,7 @@ Pdok.Api.prototype.getMapObject = function() {
 
 Pdok.Api.prototype.createFeature = function(wkt, typestyle, name, description){
     var wktFormat = new OpenLayers.Format.WKT();
-    // OpenLayers.Util.getParameters() cuts paramaters with comma's into an array
+    // OpenLayers.Util.getParameters() splits paramaters with comma's into an array
     // because a LINESTRING wkt contains comma we have to concat them back
     if (wkt instanceof Array) {
         wkt = wkt.join();
@@ -938,28 +666,54 @@ Pdok.Api.prototype.createStyles = function(){
     var olDefault = OpenLayers.Feature.Vector.style['default'];
 
     this.styles = {};
- 
-    // create a default Point style
+
+    // create a default styles for point: mt0, line: lt0 and polygon pt0
+    //.these HAVE to be here because there is code depending on the availability of those
+    // you can off course override this
     var pdokDefaultPoint = OpenLayers.Util.applyDefaults(
         {
-            externalGraphic: "http://pdokkaart.pdokloket.nl/api/markertypes/default.png",
-            graphicHeight: 37,
+            id: 'mt0',
+            name: 'Standaard marker',
+            externalGraphic: Pdok.ApiUrl+"/markertypes/document-properties.png",
+            graphicHeight: 32,
             graphicWidth: 32,
-            graphicYOffset: -37,
-            pointRadius: 1
+            graphicYOffset: -32
         }, {});
-
     this.styles.mt0 = pdokDefaultPoint;
+    var pdokDefaultLine = OpenLayers.Util.applyDefaults(
+        {
+            id: 'lt0', 
+            strokeColor: '#273397', 
+            strokeWidth: 5,
+            strokeOpacity: 0.5, 
+            name: 'Standaard lijn'
+        }, {});
+    this.styles.lt0 = pdokDefaultLine;
+    var pdokDefaultPolygon = OpenLayers.Util.applyDefaults(
+        {
+            id: 'pt0', 
+            fillColor: '#273397',
+            fillOpacity: 0.3, 
+            strokeColor: '#273397', 
+            strokeWidth: 2, 
+            name: 'Standaard vlak'
+        }, {});
+    this.styles.pt0 = pdokDefaultPolygon;
 
-    // if the the user added their own styles, they should create a variable 'customStyles'
+    var pdokDefaultStyle = OpenLayers.Util.applyDefaults(
+    {
+        externalGraphic: Pdok.ApiUrl+"/markertypes/default.png",
+        graphicHeight: 37,
+        graphicWidth: 32,
+        graphicYOffset: -37,
+        pointRadius: 1
+    }, {});
+
+    // if the the user added their own styles, they should create a variable 'defaultStyles'
     // hereby overriding the inbuild defaultStyles
-    // TODO ?? or only extending ?????
-    if (this.customStyles) {
-        this.defaultStyles = customStyles;
-    }
     for (var i = 0; i<this.defaultStyles.length; i++){
         var style = this.defaultStyles[i];
-        this.styles[style.id] = OpenLayers.Util.applyDefaults( style, pdokDefaultPoint);
+        this.styles[style.id] = OpenLayers.Util.applyDefaults( style, pdokDefaultStyle);
     }
 }
 
@@ -1372,10 +1126,11 @@ Pdok.Api.prototype.setLocationToolProps = function(styletype, zmin, zmax, xorwkt
         // default to x y field from api defaults
         this.locationtoolwktfield = null; // NO wkt
     }
-    if(zmin){
+    // be carefull not to use if(zmin) or if(zmax), they can be 0 (which solves to false)
+    if(zmin != undefined){
         this.locationtoolzmin = zmin;
     }
-    if(zmax){
+    if(zmax != undefined){
         this.locationtoolzmax = zmax;
     }
     return true;
@@ -1409,6 +1164,7 @@ Pdok.Api.prototype.enableLocationTool = function(){
             // stop all locationtool controls
             if (confirm('Er is al een geldige lokatie. \nKlik OK om verder te gaan,\nof Annuleren/Cancel om opnieuw te klikken.')) {
                 apiObject.map.events.unregister("moveend", apiObject.map, locationToolCheck);
+                apiObject.map.events.unregister("click", apiObject.map, locationToolCheck);
                 apiObject.disableLocationTool();
             }
             else {
@@ -1430,20 +1186,24 @@ Pdok.Api.prototype.enableLocationTool = function(){
                 zoom = apiObject.locationtoolzmin;
             }
             else{
-                msg += "\nKlik op OK om "+(mapiObject.ap.getZoom()-apiObject.locationtoolzmax)+" zoomnivo's uit te zoomen \n(of Annuleren/Cancel om het zelf te doen)";
+                msg += "\nKlik op OK om "+(apiObject.map.getZoom()-apiObject.locationtoolzmax)+" zoomnivo's uit te zoomen \n(of Annuleren/Cancel om het zelf te doen)";
                 zoom = apiObject.locationtoolzmax;
 
             }
             if (!alerted){
                 //alerted = true;
                 if(confirm(msg)){
-                   apiObject.map.zoomTo(zoom);
+                    apiObject.map.zoomTo(zoom);
+                }
+                else{
+                    apiObject.disableLocationTool();
                 }
             }
         }
     }
-    // register above check function to listen to moveend events of the map
+    // register above check function to listen to moveend en click events of the map
     this.map.events.register("moveend", this.map, locationToolCheck);
+    this.map.events.register("click", this.map, locationToolCheck);
     // first check
     locationToolCheck();
     return true;
@@ -1481,7 +1241,7 @@ Pdok.Api.prototype.startLocationTool = function(){
     }
     else if (this.locationtoolstyle[0]=='p'){
         if (this.drawLocationPolygonControl==null){
-            this.drawlocationPolygonControl = new OpenLayers.Control.DrawFeature(this.locationLayer, OpenLayers.Handler.Polygon);
+            this.drawLocationPolygonControl = new OpenLayers.Control.DrawFeature(this.locationLayer, OpenLayers.Handler.Polygon);
             this.map.addControl(this.drawLocationPolygonControl);
         }
         currentDrawControl = this.drawLocationPolygonControl;
@@ -1529,14 +1289,19 @@ Pdok.Api.prototype.startLocationTool = function(){
 }
 
 
-Pdok.Api.prototype.handleGetResponse = function(response){
-    if (response.status != 200){
+Pdok.Api.prototype.handleGetFeaturesResponse = function(response){
+    //  trying to catch proxy errors
+    if (response.status == 502 || response.status == 403){
+        alert('Fout bij het ophalen van de url.\nDit lijkt een proxy probleem.\nKomt de data van een ander domein dan de web applicatie?\nDan moet het data domein opgenomen worden in de proxy-instellingen.');
+        return
+    }
+    else if (response.status != 200){
         alert('Fout bij het ophalen van de url');
         return
     }
     var data = response.responseText;
     // we have data now: add to map
-    this.addFeaturesFromString(data, this.dataType, this.zoomToFeatures);
+    api.addFeaturesFromString(data, this.dataType, this.zoomToFeatures);
 }
 
 Pdok.Api.prototype.addFeaturesFromString = function(data, type, zoomToFeatures){
@@ -1549,7 +1314,14 @@ Pdok.Api.prototype.addFeaturesFromString = function(data, type, zoomToFeatures){
     };
     if (type.toUpperCase() == 'KML') {
         format = new OpenLayers.Format.KML(options);
-        features = format.read(data);
+        if (data.search(/\n/) > -1 && data.search(/\n/) < data.length){
+        	//alert("Er zijn returns gevonden in de KML, deze zijn vervangen door een spatie.")
+        	//features = format.read(data.replace(/\n/g," ").slice(0,data.replace(/\n/g," ").lastIndexOf(" ")) +"\n");
+        	features = format.read(data.replace(/\n/g," ") +"\n");
+        }
+        else{
+	        features = format.read(data);
+	    }
     }
     else if(type.toUpperCase() == "TXT"){
         // TXT files will default to epsg:28992 / RD coordinates
@@ -1605,10 +1377,9 @@ Pdok.Api.prototype.addFeaturesFromString = function(data, type, zoomToFeatures){
             }
         }
     }
-    
     if (features.length==0) {
         // mmm, no featues
-        alert('Geen features aangemaakt. Is het formaat wel ok?\nRaadpleeg eventueel de help pagina\'s voor de juiste formaten.');
+        alert('Geen features aangemaakt. Is het formaat wel ok?\nU had gekozen voor het formaat: "'+type+'".\nRaadpleeg eventueel de help pagina\'s voor de juiste formaten.');
         return true;
     }
     this.featuresLayer.addFeatures(features);
@@ -1648,12 +1419,14 @@ Pdok.Api.prototype.deleteLayers = function(nonVectorLayers, vectorLayers) {
 Pdok.Api.prototype.addFeaturesFromUrl = function(url, type, zoomToFeatures){
 
     var apiObject = this;
+    var context = {};
     // little dirty way to pass type and zoomToFeatures:
-    apiObject.dataType = type;
-    apiObject.zoomToFeatures = zoomToFeatures;
+    context.dataType = type;
+    context.zoomToFeatures = zoomToFeatures;
 
     if (type.toUpperCase() == "KML"){
         // kml
+        this.kmlurl = url;
     }
     else if(type.toUpperCase() == "TXT"){
         // tab separated txt file (in EPSG:28992)
@@ -1666,6 +1439,7 @@ Pdok.Api.prototype.addFeaturesFromUrl = function(url, type, zoomToFeatures){
         //
         // lat  lon title   description
         // 150000   350000    foo omschrijving foo
+        this.txturl = url;
     }
     else{
         alert('addFeaturesFromUrl aanroep met een niet ondersteund type: '+type);
@@ -1673,8 +1447,8 @@ Pdok.Api.prototype.addFeaturesFromUrl = function(url, type, zoomToFeatures){
     }
     OpenLayers.Request.GET({
             url: url,
-            callback: apiObject.handleGetResponse,
-            scope: apiObject
+            callback: apiObject.handleGetFeaturesResponse,
+            scope: context
     });
 
     return true;
@@ -1692,27 +1466,17 @@ Pdok.Api.prototype.addTxt = function(url){
 Pdok.Api.prototype.createIframeTags = function(){
     // map div size
     var mapSize = this.map.getSize();
-    // <iframe width='650' height='450' frameborder='0' scrolling='no' marginheight='0' marginwidth='0' src='http://nieuwsinkaart.nl/pdok/kaart/api/api.html?&loc=155000,463000&zl=2' title='PDOK Kaart'></iframe><br /><small>PDOK Kaart: <a href='http://nieuwsinkaart.nl/pdok/kaart/?&loc=155000,463000&zl=2' style='color:#0000FF;text-align:left'>Grotere kaart weergeven</a></small>
-    /* 
-        <iframe width='650' height='450' frameborder='0' scrolling='no' marginheight='0' marginwidth='0' src='http://nieuwsinkaart.nl/pdok/kaart/api/api.html?&loc=155000,463000&zl=2' title='PDOK Kaart'></iframe>
-        <br /><small>PDOK Kaart: <a href='http://nieuwsinkaart.nl/pdok/kaart/?&loc=155000,463000&zl=2' style='color:#0000FF;text-align:left'>Grotere kaart weergeven</a></small>
-    */
     var iframeTags = '<iframe width="'+mapSize.w+'" height="'+mapSize.h+'" frameborder="0" scrolling=no marginheight="0" marginwidth="0" src="'+this.createMapLink()+'" title="PDOK Kaart"></iframe>';
-        //'<br /><small>PDOK Kaart: <a href="'+this.createMapLink()+'" style="color:#0000FF;text-align:left">Grotere kaart weergeven</a></small>';
     return iframeTags;
 }
+
 Pdok.Api.prototype.createObjectTags = function(){
     // map div size
     var mapSize = this.map.getSize();
-    // <object width='650' height='450' codetype='text/html' data='http://nieuwsinkaart.nl/pdok/kaart/api/api.html?&loc=155000,463000&zl=2' title='PDOK Kaart'></object><br /><small>PDOK Kaart: <a href='http://nieuwsinkaart.nl/pdok/kaart/?&loc=155000,463000&zl=2' style='color:#0000FF;text-align:left'>Grotere kaart weergeven</a></small>
-    /* 
-        <object width='650' height='450' codetype='text/html' data='http://nieuwsinkaart.nl/pdok/kaart/api/api.html?&loc=155000,463000&zl=2' title='PDOK Kaart'></object>
-        <br /><small>PDOK Kaart: <a href='http://nieuwsinkaart.nl/pdok/kaart/?&loc=155000,463000&zl=2' style='color:#0000FF;text-align:left'>Grotere kaart weergeven</a></small>
-    */
     var objectTags = '<object width="'+mapSize.w+'" height="'+mapSize.h+'" codetype="text/html" data="'+this.createMapLink()+'" title="PDOK Kaart"></object>';
-        //'<br /><small>PDOK Kaart: <a href="'+this.createMapLink()+'" style="color:#0000FF;text-align:left">Grotere kaart weergeven</a></small>';
     return objectTags;
 }
+
 Pdok.Api.prototype.createMapLink = function(){
 	pathname = window.location.pathname;
     if (pathname.toLowerCase().search("index.html") > -1){
@@ -1721,6 +1485,7 @@ Pdok.Api.prototype.createMapLink = function(){
     base = window.location.host + pathname;
     return 'http://'+base+'api/api.html?'+OpenLayers.Util.getParameterString(this.getConfig());
 }
+
 Pdok.Api.prototype.createMailLink = function(){
 	pathname = window.location.pathname;
     if (pathname.toLowerCase().search("index.html") > -1){
@@ -1736,24 +1501,30 @@ Pdok.Api.prototype.createHtmlBody = function(){
                '</script>';
     return html;
 }
+
 Pdok.Api.prototype.createHtmlHead = function(){
-    var pathname = window.location.pathname;
-    if (pathname.toLowerCase().search("index.html") > -1){
-    	pathname = window.location.pathname.substr(0,window.location.pathname.toLowerCase().search("index.html"));
+    var base = Pdok.createBaseUri();
+    // styles and layers definitions
+    var stylesAndLayers = '';
+    if (this.markersdef) {
+        stylesAndLayers += '\n<script src="'+this.markersdef+'"></script>';
     }
-    // TODO make this a baseuri config?
-    base = window.location.host + pathname;
-    var head = '<script src="http://'+base+'api/javascripts/OpenLayers.js"></script>'+
-    '\n<script src="http://'+base+'api/javascripts/proj4js-compressed.js"></script>'+
-    '\n<script src="http://'+base+'api/javascripts/pdok-api.js"></script>'+
-    '\n<link rel="stylesheet" href="http://'+base+'api/styles/default/style.css" type="text/css">'+
-    '\n<link rel="stylesheet" href="http://'+base+'api/styles/api.css" type="text/css">'+
+    if (this.layersdef) {
+        stylesAndLayers += '\n<script src="'+this.layersdef+'"></script>';
+    }
+    var head = '<script src="'+base+'api/js/OpenLayers.js"></script>'+
+    '\n<script src="'+base+'api/js/proj4js-compressed.js"></script>'+
+    '\n<script src="'+base+'api/js/pdok-api.js"></script>'+
+    stylesAndLayers +
+    '\n<link rel="stylesheet" href="'+base+'api/styles/default/style.css" type="text/css">'+
+    '\n<link rel="stylesheet" href="'+base+'api/styles/api.css" type="text/css">'+
     '\n<script>'+
-    '\nOpenLayers.ImgPath="http://pdokkaart.pdokloket.nl/api/img/";'+
+    '\nOpenLayers.ImgPath="'+Pdok.ApiUrl+'/img/";'+
     '\nvar config = '+this.serialize(this.getConfig(), true)+';\n'+
     '\nfunction createPDOKKaart() {var api = new Pdok.Api(config);return api;}\n</script>';
     return head;
 }
+
 Pdok.Api.prototype.getConfig = function() {
     var config = {};
 
@@ -1798,7 +1569,7 @@ Pdok.Api.prototype.getConfig = function() {
     if(this.locationtool) {
         config.locationtool = true;
         config.locationtoolstyle = this.locationtoolstyle;
-        if (this.locationwktfield) {
+        if (this.locationtoolwktfield) {
             config.locationtoolwktfield = this.locationtoolwktfield;
         }
         else {
@@ -1808,16 +1579,41 @@ Pdok.Api.prototype.getConfig = function() {
         config.locationtoolzmin = this.locationtoolzmin;
         config.locationtoolzmax = this.locationtoolzmax;
     }
-    // features
+    // markersdef
+    if(this.markersdef) {
+        config.markersdef = this.markersdef;
+    }
+    // layersdef
+    if(this.layersdef) {
+        config.layersdef = this.layersdef;
+    }
+    // kmlurl OR txturl OR features
+    // at this moment NOT a combination of these two
+    // all features from KML or TXT are added to 'featureslayer'
+    // so if the user added even more markers/features
+    // we should try to make a diff, to know which features to add in the features-kmlstring-parameter
+    // but if the user has made changes by hand in wizard, it is getting even more comples
+    // so for now: there is either a kmlurl and/or a txturl OR only features as parameter
     if (this.featuresLayer.features.length>0) {
-        var kmlformat = new OpenLayers.Format.KML({
-            foldersDesc: null,
-            foldersName: null,
-            placemarksDesc: '&nbsp;',   // we add &nbsp; here because null or '' will cause the KML writer to not see it as value
-            internalProjection: this.map.baseLayer.projection,
-            externalProjection: new OpenLayers.Projection("EPSG:4326")
-        });
-        config.features=kmlformat.write(this.featuresLayer.features);
+        var doFeatures = true;
+        if (this.kmlurl) {
+            config.kmlurl = this.kmlurl;
+            doFeatures = false;
+        }
+        if (this.txturl) {
+            config.txturl = this.txturl;
+            doFeatures = false;
+        }
+        if (doFeatures) {
+            var kmlformat = new OpenLayers.Format.KML({
+                foldersDesc: null,
+                foldersName: null,
+                placemarksDesc: '&nbsp;',   // we add &nbsp; here because null or '' will cause the KML writer to not see it as value
+                internalProjection: this.map.baseLayer.projection,
+                externalProjection: new OpenLayers.Projection("EPSG:4326")
+            });
+            config.features=kmlformat.write(this.featuresLayer.features);
+        }
     }
     return config;
 }
@@ -1878,12 +1674,10 @@ Pdok.Api.prototype.serialize = function(obj, stringQuotes){
 
 //Function to toggle visibility of the OpenLayers.LayerSwitcher
 Pdok.Api.prototype.setLayerSwitcherVisible = function(isVisible){
-	if (isVisible){
-		this.showlayerswitcher = true;
-	}
-	else{
-		this.showlayerswitcher = false;
-	}
+    if (isVisible){
+        this.showlayerswitcher = true;
+    }
+    else{
+        this.showlayerswitcher = false;
+    }
 }
-
-
