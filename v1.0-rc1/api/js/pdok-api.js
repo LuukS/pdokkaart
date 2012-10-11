@@ -21,7 +21,7 @@
 
 
 Pdok = {};
-Pdok.API_VERSION_NUMBER = '1.0-rc1-ls';
+Pdok.API_VERSION_NUMBER = '1.0-rc1';
 
 // CONFIG
 
@@ -29,16 +29,16 @@ Pdok.API_VERSION_NUMBER = '1.0-rc1-ls';
 // The proxyhost is needed for the geocoder
 
 // PDOK LOKET PRODUKTIE
-//Pdok.ApiUrl = 'http://pdokkaart.pdokloket.nl/api';
-//OpenLayers.ProxyHost = "http://"+window.location.host+"/proxy.php?url=";  // current pdokloket proxy
+Pdok.ApiUrl = 'http://pdokkaart.pdokloket.nl/api';
+OpenLayers.ProxyHost = "http://"+window.location.host+"/proxy.php?url=";  // current pdokloket proxy
 
 // TEST
 //Pdok.ApiUrl = 'http://www.duif.net/pdok/api';
 //OpenLayers.ProxyHost = "http://"+window.location.host+"/cgi-bin/proxy.cgi?url=";
 
 // ONTWIKKEL
-Pdok.ApiUrl = 'http://localhost/~giscc/LuukS/pdokkaart/api';
-OpenLayers.ProxyHost = "http://"+window.location.host+"/cgi-bin/proxy.cgi?url=";
+//Pdok.ApiUrl = 'http://localhost/pdokkaart/api';
+//OpenLayers.ProxyHost = "http://"+window.location.host+"/cgi-bin/proxy.cgi?url=";
 
 
 OpenLayers.ImgPath = './img/';
@@ -1605,23 +1605,14 @@ Pdok.Api.prototype.getConfig = function() {
             doFeatures = false;
         }
         if (doFeatures) {
-            // If only one feature is added and this is a point then use the parameter mloc
-            if (this.featuresLayer.features.length == 1 && this.featuresLayer.features[0].geometry.CLASS_NAME == "OpenLayers.Geometry.Point"){
-            	config.mloc = this.featuresLayer.features[0].geometry.x + "," + this.featuresLayer.features[0].geometry.y;
-            	config.titel = this.featuresLayer.features[0].attributes.name;
-            	config.tekst =  this.featuresLayer.features[0].attributes.description;
-            	config.mt = this.featuresLayer.features[0].attributes.styletype;
-            }
-			else{
-				var kmlformat = new OpenLayers.Format.KML({
-					foldersDesc: null,
-					foldersName: null,
-					placemarksDesc: '&nbsp;',   // we add &nbsp; here because null or '' will cause the KML writer to not see it as value
-					internalProjection: this.map.baseLayer.projection,
-					externalProjection: new OpenLayers.Projection("EPSG:4326")
-				});
-				config.features=kmlformat.write(this.featuresLayer.features);
-			}
+            var kmlformat = new OpenLayers.Format.KML({
+                foldersDesc: null,
+                foldersName: null,
+                placemarksDesc: '&nbsp;',   // we add &nbsp; here because null or '' will cause the KML writer to not see it as value
+                internalProjection: this.map.baseLayer.projection,
+                externalProjection: new OpenLayers.Projection("EPSG:4326")
+            });
+            config.features=kmlformat.write(this.featuresLayer.features);
         }
     }
     return config;
